@@ -9,14 +9,18 @@ class SellerItemsSpider(scrapy.Spider):
     # start_urls = ['http://souq.com/eg-ar/']
 
     def start_requests(self) :
-        yield scrapy.Request(url="https://egypt.souq.com/eg-ar/{0}/s/?as=1&section=2&page=1".format(self.seller_name), callback=self.parse_links)
+        yield scrapy.Request(url="https://egypt.souq.com/eg-ar/{0}/s/?as=1&section=2&page=1".format(self.seller_name), callback=self.parse_links, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'
+        })
 
     def parse_links(self, response):
         links = response.xpath("//section[@class='filter-group']/ul/li[2]/div/div/ul/li/label/input/@value").getall()
         for link in links :
             new_link = link + '?section=2&page=1'
             print('===============> ONE')
-            yield scrapy.Request(new_link, callback=self.parse_items, errback=self.errback_httpbin,  dont_filter=True)
+            yield scrapy.Request(new_link, callback=self.parse_items, errback=self.errback_httpbin,  dont_filter=True, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'
+            })
 
     def parse_items(self, response) :
         # NOTE: Continued OR PAUSE
@@ -24,7 +28,8 @@ class SellerItemsSpider(scrapy.Spider):
         for item in response.xpath("//div[@class='column column-block block-grid-large single-item']") :
             target_url = item.xpath(".//div/div/div/a/@href").get()
             item_id = item.xpath(".//@data-ean").get()
-            item_price = item.xpath(".//div/div[@class='columns small-7 medium-12']/ul/li[2]/div/div/h5[@class='price']/span/span/text()").get()
+            item_price = item.xpath(".//div/div[@class='columns small-7 medium-12']/a/ul/li[2]/div[@class='row row-padding-15']/div[@class='column medium-6'][1]/h5/span[@class='is block sk-clr1']/span[@class='itemPrice']/text()").get()
+            print('===============> item_price {0}'.format(item_price))
             print('===============> Three')
             print(self.count)
             yield scrapy.Request(target_url, callback=self.single_item, errback=self.errback_httpbin, dont_filter=True, meta ={'item_id': item_id, 'item_price': item_price})
@@ -32,7 +37,9 @@ class SellerItemsSpider(scrapy.Spider):
         next_page = response.xpath("//li[@class='pagination-next goToPage']/a/@href").get()
         if next_page :
             url_next_page = next_page.replace('?', '?section=2&')
-            yield scrapy.Request(url_next_page, callback=self.parse_items)
+            yield scrapy.Request(url_next_page, callback=self.parse_items, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'
+            })
 
 
     def single_item(self, response):
@@ -40,8 +47,7 @@ class SellerItemsSpider(scrapy.Spider):
         item_id = response.request.meta['item_id']
         item_price = response.request.meta['item_price']
 
-        seller_show = response.xpath(
-            "//dl[@class='stats clearfix']/dd[1]/span/a/b/text()").get()
+        seller_show = response.xpath("//dl[@class='stats clearfix']/dd[1]/span/a/b/text()").get()
         result = self.chk_if_show_in_offer(seller_show)
         print('================')
         print('result single item')
@@ -60,9 +66,9 @@ class SellerItemsSpider(scrapy.Spider):
             }
             if link_other_sellers_container :
                 print('===============> FIVE')
-                yield scrapy.Request(link_other_sellers_container, callback=self.parse_other_sellers, errback=self.errback_httpbin,  dont_filter=True, meta=data)
-
-
+                yield scrapy.Request(link_other_sellers_container, callback=self.parse_other_sellers, errback=self.errback_httpbin,  dont_filter=True, meta=data, headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36'
+                })
         else:
             pass
 
@@ -72,12 +78,18 @@ class SellerItemsSpider(scrapy.Spider):
         ur_name = ''
         for row in response.xpath("//div[@id='condition-all']/div"):
             print('===============> SEVEN')
-            other_sellers = row.xpath(".//div[4]/div[@class='field seller-name']/span/a/text()").get()
+            other_sellers = row.xpath(".//div[@class='large-2 medium-2 small-6 columns seller-field']/div[@class='field seller-name']/span[@class='value']/a/text()").get()
+            print('===============> other_sellers {0}'.format(other_sellers))
             result = self.chk_if_show_in_offer(other_sellers)
-            if result == False:
+            ur_offer = row.xpath("normalize-space(.//div[2]/div[@class='field price-field']/text())").get()
+            
+            print('===============> result {0}'.format(result))
+            print('===============> ur_offer {0}'.format(ur_offer))
+            if result == True:
                 print('===============> Eight')
                 ur_name = other_sellers
-                ur_offer = row.xpath(".//div[2]/div[@class='field price-field']/text()").get()
+                # div[@class='large-3 medium-3 small-6 columns']/div[@class='field price-field']/text()
+                ur_offer = row.xpath(".//div[@class='large-3 medium-3 small-6 columns']/div[@class='field price-field']/text()").get()
                 break
         print('===============> Nigne')
         yield {
@@ -86,7 +98,7 @@ class SellerItemsSpider(scrapy.Spider):
             'seller_name': response.request.meta['seller_name'],
             'item_ID': response.request.meta['item_ID'],
             'ur_name': ur_name,
-            'ur_price': ur_offer
+            'ur_price': ur_offer.strip()
         }
 
     
